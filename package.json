@@ -1,0 +1,33 @@
+{
+  "name": "meow",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Lightweight AI coding agent in your terminal",
+  "main": "src/index.ts",
+  "scripts": {
+    "start": "bun run src/index.ts",
+    "dev": "bun run src/index.ts",
+    "lint": "eslint src/",
+    "typecheck": "tsc --noEmit",
+    "check": "bun run typecheck && bun run lint",
+    "prepare": "bunx husky install"
+  },
+  "dependencies": {
+    "@clack/prompts": "1.2.0",
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "diff-match-patch": "^1.0.5",
+    "globby": "16.2.0",
+    "js-yaml": "4.1.1",
+    "picocolors": "1.1.1"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/diff-match-patch": "^1.0.36",
+    "@types/js-yaml": "4.0.9",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "eslint": "^8.57.0",
+    "husky": "^9.0.0",
+    "typescript": "^5.0.0"
+  }
+}
