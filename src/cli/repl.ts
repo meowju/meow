@@ -4,12 +4,16 @@ import { Agent } from "../agent/agent";
 import { resolve } from "path";
 import { SPECIALISTS, summon } from "../agent/summoner";
 import { DEFAULT_TOOLS } from "../types/tool";
+import { Orchestrator } from "../orchestrator/Orchestrator";
 
 export function createRepl(agent: Agent) {
+  let orchestrator: Orchestrator | null = null;
+  let parallelMode = false;
+
   return {
     async start() {
       process.stdout.write("\x1Bc"); // Clear terminal
-      
+
       console.log(pc.bold(pc.cyan("MEOW")) + pc.dim(" | ") + pc.white("Lightweight AI Coding Agent"));
       console.log(pc.dim("Sovereign Mode: Commands, Files, Escalation Active\n"));
 
@@ -53,6 +57,8 @@ export function createRepl(agent: Agent) {
               console.log(pc.cyan("  /drop <file>   ") + pc.dim("- Remove file from context"));
               console.log(pc.cyan("  /files         ") + pc.dim("- List files in context"));
               console.log(pc.cyan("  /clear         ") + pc.dim("- Clear context and screen"));
+              console.log(pc.cyan("  /parallel      ") + pc.dim("- Toggle parallel orchestrator mode"));
+              console.log(pc.cyan("  /status        ") + pc.dim("- Show orchestrator status"));
               console.log(pc.cyan("  /exit          ") + pc.dim("- Exit REPL\n"));
               break;
 
@@ -67,28 +73,80 @@ export function createRepl(agent: Agent) {
               }
               break;
 
+            case "parallel":
+              if (parallelMode) {
+                parallelMode = false;
+                orchestrator = null;
+                console.log(pc.yellow("Parallel mode disabled. Using sequential execution."));
+              } else {
+                parallelMode = true;
+                orchestrator = new Orchestrator(agent);
+                console.log(pc.green("Parallel mode enabled. Use '/' delimited tasks for parallel execution."));
+              }
+              continue;
+
+            case "status":
+              if (orchestrator) {
+                const status = orchestrator.getStatus();
+                console.log(`\n## Orchestrator Status:`);
+                console.log(`  Queue: ${JSON.stringify(status.queue)}`);
+                console.log(`  Workers: ${status.workers}`);
+                console.log(`  Locked Files: ${status.lockedFiles}\n`);
+              } else {
+                console.log(pc.dim("Orchestrator not initialized. Use /parallel to enable."));
+              }
+              continue;
+
             default:
               console.log(pc.red(`Unknown command: /${cmd}`));
           }
           continue;
         }
 
+        // Check for "/" delimited explicit tasks
+        const hasExplicitTasks = text.includes(" / ");
+
         const s = p.spinner();
-        s.start(pc.dim("Thinking..."));
-        
+        s.start(pc.dim(parallelMode || hasExplicitTasks ? "Orchestrating..." : "Thinking..."));
+
         try {
-          const response = await agent.chat(
-            text, 
-            false, 
-            undefined, 
-            (status) => s.message(pc.dim(status))
-          );
+          let response: string;
+
+          if (parallelMode || hasExplicitTasks) {
+            if (!orchestrator) {
+              orchestrator = new Orchestrator(agent);
+            }
+
+            const result = await orchestrator.execute(
+              text,
+              {
+                tasks: hasExplicitTasks ? text : undefined,
+                onStatus: (update: any) => {
+                  if (update.progress) {
+                    s.message(pc.dim(`${update.progress.label}: ${update.progress.current}/${update.progress.total}`));
+                  } else {
+                    s.message(pc.dim(update.message));
+                  }
+                }
+              }
+            );
+
+            response = result.summary;
+          } else {
+            response = await agent.chat(
+              text,
+              false,
+              undefined,
+              (status) => s.message(pc.dim(status))
+            );
+          }
+
           s.stop(pc.dim("Done"));
 
           // Premium Response Rendering
           console.log("");
           console.log(pc.bold(pc.cyan("┌── MEOW ───────────────────────────────────────────────────")));
-          
+
           const coloredResponse = response
             .replace(/^# (.*)/gm, (_, m) => pc.bold(pc.cyan(m)))
             .replace(/^## (.*)/gm, (_, m) => pc.bold(pc.white(m)))

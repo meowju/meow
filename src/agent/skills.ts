@@ -12,6 +12,7 @@ export interface Skill {
 
 export class SkillManager {
   private skills: Map<string, Skill> = new Map();
+  private isInitialized: boolean = false;
 
   constructor() {}
 
@@ -20,6 +21,7 @@ export class SkillManager {
    * Looks for SKILL files in .meow/skills and .claude/skills
    */
   async discover() {
+    if (this.isInitialized) return;
     const patterns = [
       ".meow/skills/**/SKILL.md",
       ".claude/skills/**/SKILL.md",
@@ -53,6 +55,7 @@ export class SkillManager {
         console.error(`Failed to load skill at ${file}:`, e);
       }
     }
+    this.isInitialized = true;
   }
 
   getSkill(name: string): Skill | undefined {
@@ -61,6 +64,10 @@ export class SkillManager {
 
   getAllSkills(): Skill[] {
     return Array.from(this.skills.values());
+  }
+
+  getSkillNames(): string[] {
+    return Array.from(this.skills.keys());
   }
 
   getSkillsPrompt(): string {

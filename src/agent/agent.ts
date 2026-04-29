@@ -10,7 +10,8 @@ import { McpManager } from "./mcp";
 import { resolve } from "path";
 
 import { summon } from "./summoner";
-import { DEFAULT_TOOLS } from "../types/tool";
+import { DEFAULT_TOOLS, Tool } from "../types/tool";
+import { ExtensionManager } from "../extensions/ExtensionManager";
 
 export interface AgentConfig {
   model: string;
@@ -39,28 +40,30 @@ const REASONING_TAGS = [
 ];
 
 export class Agent {
-  private model: string;
-  private baseUrl: string;
-  private apiKey?: string;
+  private _model: string;
+  private _baseUrl: string;
+  private _apiKey?: string;
   private maxRetries: number;
   private messages: Message[] = [];
   private files: Set<string> = new Set();
   private editedFiles: Set<string> = new Set();
-  
+
   public skillManager: SkillManager;
   public mcpManager: McpManager;
+  public extensionManager: ExtensionManager;
 
   constructor(config: AgentConfig) {
-    this.model = config.model;
-    this.baseUrl = config.baseUrl;
+    this._model = config.model;
+    this._baseUrl = config.baseUrl;
     this.maxRetries = config.maxRetries || 3;
-    this.apiKey = config.apiKey;
+    this._apiKey = config.apiKey;
     if (config.files) {
       config.files.forEach(f => this.files.add(f));
     }
     
     this.skillManager = new SkillManager();
     this.mcpManager = new McpManager();
+    this.extensionManager = new ExtensionManager();
   }
 
   async chat(
@@ -106,7 +109,11 @@ export class Agent {
         const toolMatch = response.match(/TOOL:\s*(\w+)\s*\|\s*(.*)/);
         if (toolMatch) {
           const [_, toolName, toolArgs] = toolMatch;
-          const tool = DEFAULT_TOOLS.find(t => t.name === toolName);
+          
+          // Search in core tools and active extension tools
+          const tool = DEFAULT_TOOLS.find(t => t.name === toolName) || 
+                       this.extensionManager.getActiveTools().find(t => t.name === toolName);
+
           if (tool) {
             onStatus?.(`Using tool: ${toolName}...`);
             let result = await tool.execute(toolArgs.trim(), this);
@@ -159,7 +166,8 @@ export class Agent {
       goal: userInput,
       files: Array.from(this.files),
       lastError: lastError || "Unknown issue",
-      attempt: attempt
+      attempt: attempt,
+      existingSkills: this.skillManager.getSkillNames()
     });
     
     return escalationResult;
@@ -198,19 +206,23 @@ export class Agent {
     return Array.from(this.files);
   }
 
-  private async callLLM(systemPrompt: string, messages: Message[]): Promise<string> {
+  get model(): string { return this._model; }
+  get baseUrl(): string { return this._baseUrl; }
+  get apiKey(): string | undefined { return this._apiKey; }
+
+  public async callLLM(systemPrompt: string, messages: Message[]): Promise<string> {
     // If we have an API key and the URL looks like Anthropic/Minimax, use that format
-    if (this.apiKey && (this.baseUrl.includes("minimax") || this.baseUrl.includes("anthropic"))) {
-      const url = this.baseUrl.endsWith("/v1/messages") ? this.baseUrl : `${this.baseUrl}/v1/messages`;
+    if (this._apiKey && (this._baseUrl.includes("minimax") || this._baseUrl.includes("anthropic"))) {
+      const url = this._baseUrl.endsWith("/v1/messages") ? this._baseUrl : `${this._baseUrl}/v1/messages`;
       const response = await fetch(url, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-api-key": this.apiKey,
+          "x-api-key": this._apiKey,
           "anthropic-version": "2023-06-01"
         },
         body: JSON.stringify({
-          model: this.model,
+          model: this._model,
           system: systemPrompt,
           messages: messages.map(m => ({ role: m.role, content: m.content })),
           max_tokens: 4096,
@@ -237,15 +249,15 @@ export class Agent {
       ...messages
     ];
 
-    const url = this.baseUrl.includes("/api/chat") ? this.baseUrl : `${this.baseUrl}/api/chat`;
+    const url = this._baseUrl.includes("/api/chat") ? this._baseUrl : `${this._baseUrl}/api/chat`;
     const response = await fetch(url, {
       method: "POST",
       headers: { 
         "Content-Type": "application/json",
-        ...(this.apiKey ? { "Authorization": `Bearer ${this.apiKey}` } : {})
+        ...(this._apiKey ? { "Authorization": `Bearer ${this._apiKey}` } : {})
       },
       body: JSON.stringify({
-        model: this.model,
+        model: this._model,
         messages: fullMessages,
         stream: false,
       }),
@@ -279,6 +291,8 @@ Available Tools:
 - write | <path>|<data>   : Write data to file
 - diff                    : Show uncommitted changes in the repo
 - run | <command>         : Execute a shell command (ONLY for specialized tasks like 'npm test')
+- summon | <agent>|<goal> : Summon a level-2 specialist (claude|aider) for complex tasks or roadblocks
+- activate_extension | <name> : Load a specialized extension into the session
 
 Example: TOOL: ls | .
 
@@ -304,10 +318,16 @@ Every SEARCH/REPLACE block must use this format:
 8. The closing fence: \`\`\`
 
 IMPORTANT: Do NOT include any <reasoning> or <thinking> tags in your response.
-ONLY EVER RETURN CODE IN A SEARCH/REPLACE BLOCK!`;
+ONLY EVER RETURN CODE IN A SEARCH/REPLACE BLOCK!
+
+# KARPATHY GUIDELINES
+- **Think Before Coding**: State assumptions explicitly. Surface tradeoffs. Don't hide confusion. If uncertain, ask.
+- **Simplicity First**: Minimum code that solves the problem. No abstractions for single-use code. Push back on overcomplication.
+- **Surgical Changes**: Touch only what you must. Match existing style. Don't refactor things that aren't broken.
+- **Goal-Driven Execution**: Define success criteria (e.g. "Write test, then make pass"). Loop until verified.`;
   }
 
-  private async buildSystemPrompt(): Promise<string> {
+  public async buildSystemPrompt(): Promise<string> {
     const os = await import("os");
     const { readFile } = await import("fs/promises");
     
@@ -321,11 +341,14 @@ ONLY EVER RETURN CODE IN A SEARCH/REPLACE BLOCK!`;
 
     const envInfo = `\n# CURRENT ENVIRONMENT:\n- OS: ${os.platform()} (${os.type()} ${os.release()})\n- Arch: ${os.arch()}\n- Shell: ${process.env.SHELL || (os.platform() === "win32" ? "PowerShell/cmd.exe" : "Unknown")}\n- CWD: ${process.cwd()}\n`;
     
-    // Discover Skills
+    // Discover Skills and Extensions
     await this.skillManager.discover();
-    const skillsPrompt = this.skillManager.getSkillsPrompt();
+    await this.extensionManager.discover();
 
-    let prompt = this.getBasePrompt() + envInfo + claudeMd + skillsPrompt;
+    const skillsPrompt = this.skillManager.getSkillsPrompt();
+    const extensionsPrompt = this.extensionManager.getExtensionsPrompt();
+
+    let prompt = this.getBasePrompt() + envInfo + claudeMd + skillsPrompt + extensionsPrompt;
 
     // Add Repo Context (List files using Git)
     try {
@@ -646,7 +669,7 @@ Keep it terse and accurate.`;
   }
 
   setModel(model: string) {
-    this.model = model;
+    this._model = model;
     this.messages = [];
   }
 

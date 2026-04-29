@@ -167,4 +167,38 @@ export const DEFAULT_TOOLS: Tool[] = [
       }
     },
   },
+  {
+    name: "activate_extension",
+    description: "Load an available extension into the current session (args: extension_name)",
+    execute: async (args: string, agent?: any) => {
+      const name = args.trim();
+      if (!agent || !agent.extensionManager) {
+        return "Error: Extension manager not available.";
+      }
+      const extension = await agent.extensionManager.activate(name);
+      if (extension) {
+        return `Successfully activated extension: ${extension.name}. Its tools are now available for use.`;
+      }
+      return `Error: Extension '${name}' not found. Check the extensions list in the system prompt.`;
+    },
+  },
+  {
+    name: "summon",
+    description: "Summon a specialist (Claude Code/Aider) for a complex mission (args: agent_name|goal)",
+    execute: async (args: string, agent?: any) => {
+      const parts = args.split("|");
+      const agentName = parts[0]?.trim();
+      const goal = parts.slice(1).join("|")?.trim();
+      
+      const { summon } = await import("../agent/summoner");
+      const result = await summon(agentName as any, {
+        goal: goal || "Solve current roadblock",
+        files: agent?.getFiles() || [],
+        lastError: "Explicitly requested by agent",
+        attempt: 1,
+        existingSkills: agent?.skillManager?.getSkillNames() || []
+      });
+      return result;
+    },
+  },
 ];

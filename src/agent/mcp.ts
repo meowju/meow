@@ -15,6 +15,10 @@ export class McpManager {
 
   constructor() {}
 
+  getClients(): Map<string, Client> {
+    return this.clients;
+  }
+
   async addServer(config: McpConfig) {
     this.configs.set(config.name, config);
   }
@@ -60,6 +64,21 @@ export class McpManager {
     return await client.callTool(
       { name: toolName, arguments: args },
       CallToolResultSchema
+    );
+  }
+
+  async callToolParallel(
+    calls: Array<{ serverName: string; toolName: string; args: any }>
+  ): Promise<Array<{ serverName: string; toolName: string; result?: any; error?: string }>> {
+    return Promise.all(
+      calls.map(async ({ serverName, toolName, args }) => {
+        try {
+          const result = await this.callTool(serverName, toolName, args);
+          return { serverName, toolName, result };
+        } catch (e: any) {
+          return { serverName, toolName, result: undefined, error: e.message };
+        }
+      })
     );
   }
 

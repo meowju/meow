@@ -1,0 +1,1 @@
+- [karpathy-guidelines](karpathy-guidelines.md) — coding guidelines to reduce common LLM mistakes
