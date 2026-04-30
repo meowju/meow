@@ -65,6 +65,13 @@ export class Agent {
   private L1_TOKEN_LIMIT = 40000; // The Reasoning Sweet Spot
   private currentL1Tokens = 0;
 
+  public MONOLITH_BLUEPRINT = `
+1. SINGLE WRITER PHYSICS: All state mutations (DB/Swarm) MUST go through MeowKernel. No direct writes.
+2. QUANTUM PRESERVATION: Do NOT modify 'quantum_*.ts' files unless explicitly asked.
+3. SERIALIZED EXECUTION: Favor simple synchronous/serial patterns. Avoid complex parallel async logic.
+4. ROT RESISTANCE: Prefer Vanilla JS/TS over external dependencies. Match existing surgical style.
+  `.trim();
+
   constructor(config: AgentConfig) {
     this._model = config.model;
     this._baseUrl = config.baseUrl;

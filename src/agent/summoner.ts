@@ -6,6 +6,7 @@ export interface SummonContext {
   lastError?: string;
   attempt?: number;
   existingSkills?: string[];
+  monolithBlueprint?: string;
 }
 
 export interface ExternalAgent {
@@ -19,24 +20,27 @@ export const SPECIALISTS: Record<string, ExternalAgent> = {
     name: "Claude Code",
     description: "Excellent for reasoning, complex debugging, and state-of-the-art coding tasks.",
     getCommand: (ctx) => {
+      const blueprint = ctx.monolithBlueprint || "Maintain surgical changes and simplicity.";
       const message = `I am MEOW (Meta-Orchestrator). I've hit a roadblock. 
 GOAL: ${ctx.goal}
 FAILURE: ${ctx.lastError || "Build/Test loop failure"}
 ATTEMPT: ${ctx.attempt || 1}
 RESOURCES: ${ctx.files.join(", ")}
-EXISTING SKILLS: ${ctx.existingSkills?.join(", ") || "None"}
+
+# MONOLITH BLUEPRINT (Rules of the House):
+${blueprint}
 
 INSTRUCTIONS:
 1. FIX the immediate issue and ensure all tests pass.
-2. RECURSIVE IMPROVEMENT: If this roadblock was caused by a missing capability, create a MEOW skill in 'src/skills/'.
+2. DO NOT TOUCH 'quantum_*.ts' files unless the goal specifically asks for it.
 3. DO NOT COMMIT: MEOW is the Expert Taster and will review/commit your work.
-4. REPORT: Summarize your changes precisely.
+4. REPORT: Summarize your changes and provide exact steps for MEOW to verify your work.
+5. RECURSIVE IMPROVEMENT: If you find a missing pattern, create a reusable skill in 'src/skills/'.
 
 # KARPATHY GUIDELINES:
 - THINK BEFORE CODING: State assumptions explicitly.
 - SIMPLICITY FIRST: Minimum code.
-- SURGICAL CHANGES: Touch only what you must.
-- GOAL-DRIVEN: Define success criteria.`;
+- SURGICAL CHANGES: Match the existing style exactly.`;
       
       // Use bypassPermissions and dangerously-skip-permissions for "non-stop" work
       return `claude "${message.replace(/"/g, '\\"')}" --dangerously-skip-permissions --permission-mode bypassPermissions`;
@@ -47,16 +51,20 @@ INSTRUCTIONS:
     description: "Best for complex multi-file edits and git-integrated refactoring.",
     getCommand: (ctx) => {
       const fileArgs = ctx.files.join(" ");
-      const message = `I am Meow (Flyweight). Roadblock: ${ctx.goal}. 
+      const blueprint = ctx.monolithBlueprint || "Maintain surgical changes.";
+      const message = `I am Meow (Meta-Orchestrator). Roadblock: ${ctx.goal}. 
 Last Error: ${ctx.lastError || "Unknown"}
-Please fix the code, ensure tests pass, and if you identify a repeating pattern, wrap the solution into a reusable script in 'src/skills/'.
+
+# MONOLITH BLUEPRINT:
+${blueprint}
+
+Please fix the code, ensure tests pass.
 Do NOT commit. MEOW will review and commit your changes.
 
 # KARPATHY GUIDELINES:
 - THINK BEFORE CODING: State assumptions explicitly.
-- SIMPLICITY FIRST: Minimum code that solves the problem.
-- SURGICAL CHANGES: Touch only what you must. Match style.
-- GOAL-DRIVEN: Define success criteria.`;
+- SIMPLICITY FIRST: Minimum code. Match style.
+- SURGICAL CHANGES: Do not refactor unrelated code.`;
       
       return `aider --message "${message.replace(/"/g, '\\"')}" ${fileArgs} --auto-test --yes --no-auto-commit`;
     }

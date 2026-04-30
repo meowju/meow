@@ -196,7 +196,8 @@ export const DEFAULT_TOOLS: Tool[] = [
         files: agent?.getFiles() || [],
         lastError: "Explicitly requested by agent",
         attempt: 1,
-        existingSkills: agent?.skillManager?.getSkillNames() || []
+        existingSkills: agent?.skillManager?.getSkillNames() || [],
+        monolithBlueprint: agent?.MONOLITH_BLUEPRINT
       });
       return result;
     },
