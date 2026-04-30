@@ -372,7 +372,8 @@ ONLY EVER RETURN CODE IN A SEARCH/REPLACE BLOCK!
 - **Think Before Coding**: State assumptions explicitly. Surface tradeoffs. Don't hide confusion. If uncertain, ask.
 - **Simplicity First**: Minimum code that solves the problem. No abstractions for single-use code. Push back on overcomplication.
 - **Surgical Changes**: Touch only what you must. Match existing style. Don't refactor things that aren't broken.
-- **Goal-Driven Execution**: Define success criteria (e.g. "Write test, then make pass"). Loop until verified.`;
+- **Goal-Driven Execution**: Define success criteria (e.g. "Write test, then make pass"). Loop until verified.
+- **SOP COMPLIANCE**: You MUST follow the Standard Operating Procedures (SOP) at all times. This includes the "Think-Plan-Verify" loop, the "NO TRUST" verification policy, and the "Research First" protocol for uncertainty. Failure to follow SOP is a mission failure.`;
   }
 
   public async buildSystemPrompt(): Promise<string> {
@@ -387,6 +388,18 @@ ONLY EVER RETURN CODE IN A SEARCH/REPLACE BLOCK!
       // No CLAUDE.md found
     }
 
+    let sopMd = "";
+    try {
+      sopMd = await readFile(resolve(process.cwd(), ".context/SOP.md"), "utf-8");
+      sopMd = `\n# STANDARD OPERATING PROCEDURES (SOP) - MANDATORY:\n${sopMd}\n`;
+    } catch (e) {}
+
+    let honestyMd = "";
+    try {
+      honestyMd = await readFile(resolve(process.cwd(), ".context/HONESTY.md"), "utf-8");
+      honestyMd = `\n# HONESTY & VERIFICATION STANDARDS - MANDATORY:\n${honestyMd}\n`;
+    } catch (e) {}
+
     const envInfo = `\n# CURRENT ENVIRONMENT:\n- OS: ${os.platform()} (${os.type()} ${os.release()})\n- Arch: ${os.arch()}\n- Shell: ${process.env.SHELL || (os.platform() === "win32" ? "PowerShell/cmd.exe" : "Unknown")}\n- CWD: ${process.cwd()}\n`;
     
     // Discover Skills and Extensions
@@ -396,7 +409,7 @@ ONLY EVER RETURN CODE IN A SEARCH/REPLACE BLOCK!
     const skillsPrompt = this.skillManager.getSkillsPrompt();
     const extensionsPrompt = this.extensionManager.getExtensionsPrompt();
 
-    let prompt = this.getBasePrompt() + envInfo + claudeMd + skillsPrompt + extensionsPrompt;
+    let prompt = this.getBasePrompt() + envInfo + claudeMd + sopMd + honestyMd + skillsPrompt + extensionsPrompt;
 
     // Add Repo Context (List files using Git)
     try {
