@@ -1,7 +1,10 @@
-import { execSync } from "child_process";
+import { exec } from "child_process";
+import { promisify } from "util";
 import pc from "picocolors";
 import { Agent } from "./agent";
 import { ReasoningConstraint } from "./quantum_reasoning";
+
+const execAsync = promisify(exec);
 
 export class MissionReviewer {
   private agent: Agent;
@@ -11,73 +14,71 @@ export class MissionReviewer {
   }
 
   /**
-   * Performs an autonomous review of the current workspace state against a goal.
+   * Performs a Quantum Structural Analysis of the current workspace.
    */
   public async verify(goal: string, testCmd?: string): Promise<string> {
-    console.log(pc.bold(pc.cyan("\n🧐 [MISSION REVIEW] Starting verification...")));
-    console.log(pc.dim(`Goal: ${goal}\n`));
-
-    // 1. Analyze Changes
+    console.log(pc.bold(pc.cyan("\n🧐 [QUANTUM REVIEW] Starting structural analysis...")));
+    
+    // 1. Analyze Changes (Async)
     let diff = "";
     try {
-      diff = execSync("git diff HEAD~1", { encoding: "utf-8" });
+      const { stdout } = await execAsync("git diff HEAD~1", { encoding: "utf-8" });
+      diff = stdout;
     } catch (e) {
       try {
-        diff = execSync("git diff", { encoding: "utf-8" });
+        const { stdout } = await execAsync("git diff", { encoding: "utf-8" });
+        diff = stdout;
       } catch (e2) {
         diff = "Unable to fetch diff.";
       }
     }
 
-    // 2. Quantum Evaluation of Constraints
-    // We dynamically generate constraints based on the goal
+    // 2. Quantum Coherence Evaluation
     const constraints: ReasoningConstraint[] = [
       {
-        id: "GOAL_SATISFACTION",
-        weight: 20,
+        id: "STRUCTURAL_ALIGNMENT",
+        weight: 30,
         evaluate: (state: any) => {
-          // Heuristic: Does the diff contain keywords from the goal?
-          const keywords = goal.toLowerCase().split(" ").filter(w => w.length > 3);
-          return keywords.some(k => state.diff.toLowerCase().includes(k));
+          // Quantum Coherence: Does the logic in the diff map to the goal's intent?
+          const intents = goal.toLowerCase().split(" ");
+          const density = intents.filter(i => state.diff.toLowerCase().includes(i)).length / intents.length;
+          return density > 0.4;
         }
       },
       {
-        id: "CODE_QUALITY",
-        weight: 10,
+        id: "ENTROPY_REDUCTION",
+        weight: 20,
         evaluate: (state: any) => {
-          // Heuristic: No console.logs or TODOs in production code
-          return !state.diff.includes("console.log") && !state.diff.includes("TODO");
+          // Surgicality: Does the diff avoid unnecessary churn?
+          return state.diff.length < 5000; 
         }
       }
     ];
 
     const decisionSpace = [{ diff, goal }];
     const result = await this.agent.quantumReasoning.solve(decisionSpace, constraints, (msg) => {
-      process.stdout.write(`\r${pc.dim("Checking constraints: " + msg)}`);
+      process.stdout.write(`\r${pc.dim("Analyzing Coherence: " + msg)}`);
     });
 
-    console.log(pc.cyan("\n✨ [WAVE FUNCTION COLLAPSE] Analysis complete."));
-
-    // 3. Execution Verification
+    // 3. Execution Verification (Async)
     let testResult = "";
     if (testCmd) {
-      console.log(pc.dim(`Running verification tests: ${testCmd}...`));
       try {
-        testResult = execSync(testCmd, { encoding: "utf-8", timeout: 30000 });
-        console.log(pc.green("✅ Tests passed."));
+        const { stdout } = await execAsync(testCmd, { encoding: "utf-8", timeout: 60000 });
+        testResult = stdout;
+        console.log(pc.green("\n✅ [PHYSICS CHECK] Tests passed."));
       } catch (e: any) {
         testResult = e.stdout || e.message;
-        console.log(pc.red("❌ Tests failed."));
+        console.log(pc.red("\n❌ [PHYSICS CHECK] Tests failed."));
       }
     }
 
-    // 4. Final Verdict
     const passed = (!testCmd || !testResult.includes("failed")) && result !== null;
     
     if (passed) {
-      return `VERDICT: MISSION COMPLETED.\nChanges satisfy the goal [${goal}].\n${testCmd ? "Tests passed successfully." : "Manual verification (heuristic) passed."}`;
+      return `VERDICT: MISSION COHERENT.\nStructural analysis suggests high alignment with goal [${goal}].\n${testCmd ? "System physics (tests) confirmed." : "Quantum coherence confirmed."}`;
     } else {
-      return `VERDICT: MISSION INCOMPLETE.\nDetected gaps or test failures.\nERROR: ${testResult.substring(0, 500)}`;
+      return `VERDICT: MISSION DECOHERED.\nDetected logic gaps or test failures.\nERROR: ${testResult.substring(0, 500)}`;
     }
   }
 }

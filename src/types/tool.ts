@@ -1,4 +1,8 @@
-// Tool type for available agent tools
+import { exec } from "child_process";
+import { readFile, writeFile } from "fs/promises";
+import { promisify } from "util";
+
+const execAsync = promisify(exec);
 
 export interface Tool {
   name: string;
@@ -11,8 +15,7 @@ export const DEFAULT_TOOLS: Tool[] = [
     name: "read",
     description: "Read file contents",
     execute: async (path: string) => {
-      const { readFile } = await import("fs/promises");
-      return readFile(path, "utf-8");
+      return await readFile(path.trim(), "utf-8");
     },
   },
   {
@@ -20,8 +23,7 @@ export const DEFAULT_TOOLS: Tool[] = [
     description: "Write file contents",
     execute: async (args: string) => {
       const [path, content] = args.split("|");
-      const { writeFile } = await import("fs/promises");
-      await writeFile(path, content);
+      await writeFile(path.trim(), content);
       return "Written successfully";
     },
   },
@@ -29,10 +31,9 @@ export const DEFAULT_TOOLS: Tool[] = [
     name: "run",
     description: "Execute a shell command or script",
     execute: async (cmd: string) => {
-      const { execSync } = await import("child_process");
       try {
-        const output = execSync(cmd, { encoding: "utf-8", stdio: "pipe" });
-        return output || "(Command executed with no output)";
+        const { stdout, stderr } = await execAsync(cmd, { encoding: "utf-8" });
+        return stdout || stderr || "(Command executed with no output)";
       } catch (e: any) {
         return `Command Failed:\nSTDOUT: ${e.stdout}\nSTDERR: ${e.stderr}\nError: ${e.message}`;
       }
@@ -43,18 +44,18 @@ export const DEFAULT_TOOLS: Tool[] = [
     description: "Search in files (local)",
     execute: async (args: string) => {
       const [pattern, dir] = args.split("|");
-      const { execSync } = await import("child_process");
-      // Try git grep first, fallback to findstr/grep
       const isWin = process.platform === "win32";
       const cmd = `git grep -n "${pattern}" ${dir || "."}`;
       try {
-        return execSync(cmd, { encoding: "utf-8" });
+        const { stdout } = await execAsync(cmd, { encoding: "utf-8" });
+        return stdout;
       } catch (e) {
         const fallback = isWin 
           ? `findstr /s /i /c:"${pattern}" ${dir || "."}\\*` 
           : `grep -rn "${pattern}" ${dir || "."}`;
         try {
-          return execSync(fallback, { encoding: "utf-8" });
+          const { stdout } = await execAsync(fallback, { encoding: "utf-8" });
+          return stdout;
         } catch (e2) {
           return "No matches found.";
         }
@@ -100,15 +101,15 @@ export const DEFAULT_TOOLS: Tool[] = [
     name: "ls",
     description: "List files in a directory",
     execute: async (dir: string) => {
-      const { execSync } = await import("child_process");
-      // Try git ls-files first
       try {
-        return execSync(`git ls-files ${dir || "."}`, { encoding: "utf-8" });
+        const { stdout } = await execAsync(`git ls-files ${dir || "."}`, { encoding: "utf-8" });
+        return stdout;
       } catch (e) {
         const isWin = process.platform === "win32";
         const cmd = isWin ? `dir /b ${dir || "."}` : `ls ${dir || "."}`;
         try {
-          return execSync(cmd, { encoding: "utf-8" });
+          const { stdout } = await execAsync(cmd, { encoding: "utf-8" });
+          return stdout;
         } catch (e2) {
           return `Error: ${e2}`;
         }
@@ -119,9 +120,9 @@ export const DEFAULT_TOOLS: Tool[] = [
     name: "diff",
     description: "Show uncommitted changes in the repo",
     execute: async () => {
-      const { execSync } = await import("child_process");
       try {
-        return execSync("git diff", { encoding: "utf-8" });
+        const { stdout } = await execAsync("git diff", { encoding: "utf-8" });
+        return stdout;
       } catch (e) {
         return "No changes or not a git repo.";
       }
@@ -230,9 +231,8 @@ export const DEFAULT_TOOLS: Tool[] = [
     name: "commit_work",
     description: "Commit the successfully reviewed changes. MEOW (The Expert Taster) uses this to finalize a mission. Args: message",
     execute: async (message: string) => {
-      const { execSync } = await import("child_process");
       try {
-        execSync(`git add . && git commit -m "${message.replace(/"/g, '\\"')}"`, { encoding: "utf-8" });
+        await execAsync(`git add . && git commit -m "${message.replace(/"/g, '\\"')}"`);
         return `✅ Changes committed: ${message}`;
       } catch (e: any) {
         return `Error committing changes: ${e.message}`;
@@ -271,12 +271,11 @@ export const DEFAULT_TOOLS: Tool[] = [
     execute: async (pidStr: string, agent?: any) => {
       const pid = parseInt(pidStr.trim());
       if (isNaN(pid)) return "Error: Invalid PID.";
-      const { execSync } = await import("child_process");
       try {
         if (process.platform === "win32") {
-          execSync(`taskkill /F /PID ${pid}`);
+          await execAsync(`taskkill /F /PID ${pid}`);
         } else {
-          execSync(`kill -9 ${pid}`);
+          await execAsync(`kill -9 ${pid}`);
         }
         
         if (agent?.kernel) {

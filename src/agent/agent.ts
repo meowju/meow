@@ -432,16 +432,28 @@ ONLY EVER RETURN CODE IN A SEARCH/REPLACE BLOCK!
   }
 
   /**
-   * Helper to generate a mock embedding for semantic search in simulation.
-   * In a real system, this would call an embedding model.
+   * Locality Sensitive Hashing (LSH) Proxy for Semantic Search.
+   * Maps similar text to similar vector spaces without a full model.
    */
   private mockEmbedding(text: string): number[] {
     const arr = new Array(1536).fill(0);
-    // Deterministic mock embedding based on char codes
-    for (let i = 0; i < text.length; i++) {
-      arr[i % 1536] += text.charCodeAt(i) / 255;
-    }
-    return arr;
+    const words = text.toLowerCase().split(/\W+/);
+    
+    words.forEach(word => {
+      // Create a stable hash for each word
+      let hash = 0;
+      for (let i = 0; i < word.length; i++) {
+        hash = (hash << 5) - hash + word.charCodeAt(i);
+        hash |= 0; 
+      }
+      // Distribute hash into the 1536-dim vector
+      const idx = Math.abs(hash) % 1536;
+      arr[idx] += 1;
+    });
+
+    // Normalize
+    const magnitude = Math.sqrt(arr.reduce((sum, val) => sum + val * val, 0)) || 1;
+    return arr.map(v => v / magnitude);
   }
 
   private parseEdits(response: string): EditBlock[] {
