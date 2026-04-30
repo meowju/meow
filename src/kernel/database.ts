@@ -11,22 +11,17 @@ export class MeowDatabase {
     this.db.exec("PRAGMA journal_mode = WAL");
     this.db.exec("PRAGMA synchronous = NORMAL");
 
-    // Load sqlite-vec extension for vector search
+    // Load sqlite-vec extension for vector search (cross-platform)
     try {
-      const vecPath = require.resolve("sqlite-vec-windows-x64/vec0.dll");
-      this.db.loadExtension(vecPath);
-      console.log("✓ sqlite-vec extension loaded from:", vecPath);
+      // sqlite-vec package handles platform detection automatically
+      const vec = require("sqlite-vec");
+      vec.load(this.db);
+      console.log("✓ sqlite-vec extension loaded");
     } catch (e) {
       console.warn("⚠️ Could not load sqlite-vec extension:", e);
     }
 
-    this.checkIntegrity();
     this.initializeSchema();
-  }
-
-  private checkIntegrity() {
-    const result = this.db.exec("PRAGMA integrity_check") as any;
-    // bun:sqlite exec returns Database with lastResult or similar
   }
 
   private initializeSchema() {

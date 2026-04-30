@@ -24,9 +24,10 @@ async function main() {
   const command = process.argv.slice(2).join(" ");
   if (command) {
     console.log(`🤖 [MEOW] Executing command: ${command}`);
-    await agent.chat(command, false, undefined, (status) => {
+    const response = await agent.chat(command, false, undefined, (status) => {
       process.stdout.write(`\r${status}`);
     });
+    console.log("\n" + response);
     console.log("\n✅ Command completed.");
     await kernel.shutdown();
     process.exit(0);
