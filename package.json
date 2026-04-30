@@ -24,7 +24,9 @@
     "fluent-ffmpeg": "2.1.3",
     "globby": "16.2.0",
     "js-yaml": "4.1.1",
+    "mathjs": "^15.2.0",
     "picocolors": "1.1.1",
+    "quantum-circuit": "^0.9.247",
     "sqlite-vec": "^0.1.9"
   },
   "devDependencies": {
