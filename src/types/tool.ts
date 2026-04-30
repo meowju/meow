@@ -201,4 +201,15 @@ export const DEFAULT_TOOLS: Tool[] = [
       return result;
     },
   },
+  {
+    name: "archive_context",
+    description: "Offload the current conversation history to the Knowledge Base (L3) to free up context space and prevent poisoning. Use this for large logs or long discussions that are now resolved.",
+    execute: async (_: string, agent?: any) => {
+      if (!agent || typeof agent.compressAndOffload !== "function") {
+        return "Error: Context management system not available.";
+      }
+      await agent.compressAndOffload();
+      return "Successfully archived conversation tail to Quantum Knowledge Base. L1 context is now pruned.";
+    },
+  },
 ];

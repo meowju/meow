@@ -62,6 +62,9 @@ export class Agent {
   public kernel: MeowKernel;
   public db: MeowDatabase;
 
+  private L1_TOKEN_LIMIT = 40000; // The Reasoning Sweet Spot
+  private currentL1Tokens = 0;
+
   constructor(config: AgentConfig) {
     this._model = config.model;
     this._baseUrl = config.baseUrl;
@@ -87,19 +90,12 @@ export class Agent {
     onStatus?: (status: string) => void
   ): Promise<string> {
     this.messages.push({ role: "user", content: userInput });
+    this.updateTokenEstimate();
     
-    // Aggressive Context Management: Check for compaction every 10 messages
-    if (this.messages.length > 10) {
-      onStatus?.("⚛️  Compacting context...");
-      await this.compactHistory();
-    }
-    
-    // Semantic Retrieval: Fetch relevant quantum context for this turn
-    onStatus?.("⚛️  Recall: Fetching relevant context...");
-    const relevantMemories = await this.quantumMemory.recall(this.mockEmbedding(userInput));
-    if (relevantMemories.length > 0) {
-      const memoryPrompt = `\n# RECALLED QUANTUM CONTEXT (Relevant Historical Snippets):\n${relevantMemories.map(m => `- ${m.content}`).join("\n")}\n`;
-      this.messages.push({ role: "system", content: memoryPrompt });
+    // Tiered Context Management: High-Water Mark Detection
+    if (this.currentL1Tokens > this.L1_TOKEN_LIMIT || this.messages.length > 15) {
+      onStatus?.("⚛️  High-Water Mark: Offloading context to L3...");
+      await this.compressAndOffload();
     }
     
     let lastError: string | null = null;
@@ -322,6 +318,7 @@ Available Tools:
 - run | <command>         : Execute a shell command (ONLY for specialized tasks like 'npm test')
 - summon | <agent>|<goal> : Summon a level-2 specialist (claude|aider) for complex tasks or roadblocks
 - activate_extension | <name> : Load a specialized extension into the session
+- archive_context          : Explicitly offload current history to Knowledge Base (Use when context is bloated)
 
 Example: TOOL: ls | .
 
@@ -394,14 +391,24 @@ ONLY EVER RETURN CODE IN A SEARCH/REPLACE BLOCK!
       } catch (e2) {}
     }
 
+    // RECALLED QUANTUM CONTEXT (Transient Injection)
+    // We fetch memories based on the most recent user messages to provide context
+    // without bloating the permanent history.
+    const lastUserMessage = [...this.messages].reverse().find(m => m.role === "user");
+    if (lastUserMessage) {
+      const relevantMemories = await this.quantumMemory.recall(this.mockEmbedding(lastUserMessage.content));
+      if (relevantMemories.length > 0) {
+        prompt += `\n\n# RECALLED QUANTUM CONTEXT (Associative Knowledge):\n`;
+        prompt += relevantMemories.map(m => `- ${m.content}`).join("\n");
+        prompt += `\n(Note: These are historical snippets retrieved from the Knowledge Base.)\n`;
+      }
+    }
+
     // Add file contents (Selective Pruning)
     if (this.files.size > 0) {
       prompt += "\n\n# Files in chat (Surgically Selected):\n";
       for (const file of this.files) {
         try {
-          // If we have many files, only include the most relevant ones (e.g. recently edited or mentioned)
-          // For now, we include all files explicitly added by the user, 
-          // but we will prioritize them in future iterations.
           const content = await readFile(file, "utf-8");
           const filename = basename(file);
           prompt += `\n## ${filename}\n\`\`\`\n${content}\n\`\`\`\n`;
@@ -687,30 +694,45 @@ ONLY EVER RETURN CODE IN A SEARCH/REPLACE BLOCK!
     }
   }
 
-  private async compactHistory(): Promise<void> {
-    const summaryPrompt = `Summarize our progress so far into a "Progress Snapshot" with these sections:
-## Goal: [Short summary of task]
-## Progress: [Done, In Progress, Blocked]
-## Key Decisions: [Crucial technical choices]
-## Relevant Files: [List of files involved]
+  private updateTokenEstimate() {
+    const text = this.messages.map(m => m.content).join(" ");
+    this.currentL1Tokens = Math.ceil(text.length / 4); // Standard approximation
+  }
 
-Keep it terse and accurate.`;
+  /**
+   * Tiered Offloading: Moves older context from L1 (Hot) to L3 (Cold Storage)
+   * by summarizing it and archiving the raw content into Quantum Memory.
+   */
+  public async compressAndOffload(): Promise<void> {
+    const offloadCount = Math.floor(this.messages.length / 2);
+    if (offloadCount < 2) return;
 
-    const summary = await this.callLLM(
-      await this.buildSystemPrompt(), 
-      [...this.messages, { role: "user", content: summaryPrompt }]
-    );
+    const toOffload = this.messages.splice(0, offloadCount);
+    const rawContent = toOffload.map(m => `[${m.role}] ${m.content}`).join("\n");
     
-    // Keep only the last 4 messages and the new summary
-    const tail = this.messages.slice(-4);
-    this.messages = [
-      { role: "user", content: `PROGRESS SNAPSHOT OF PAST TURNS:\n${summary}` },
-      ...tail
-    ];
+    // Generate a Semantic Anchor (Summary)
+    const anchorPrompt = `Summarize the following conversation history into a single dense paragraph for long-term archival. Include all key technical decisions and state changes:\n\n${rawContent}`;
+    const summary = await this.callLLM("You are a context compression engine.", [{ role: "user", content: anchorPrompt }]);
+
+    // Archive raw content and summary into L3
+    await this.quantumMemory.store(
+      `CONTEXT_ANCHOR: ${summary}`,
+      this.mockEmbedding(summary),
+      { type: "archived_context", original_length: rawContent.length }
+    );
+
+    // Inject the anchor back into L1 to maintain semantic continuity
+    this.messages.unshift({ 
+      role: "system", 
+      content: `[SEMANTIC ANCHOR - ARCHIVED HISTORY]: ${summary}\n(Full details available in L3 via recall)` 
+    });
+
+    this.updateTokenEstimate();
   }
 
   clearHistory() {
     this.messages = [];
+    this.currentL1Tokens = 0;
   }
 
   setModel(model: string) {

@@ -20,9 +20,10 @@ export class MeowDatabase {
   }
 
   private checkIntegrity() {
-    const result = this.db.pragma("integrity_check");
-    if (result !== "ok") {
-      console.error("🚨 Database integrity check failed:", result);
+    const result = this.db.pragma("integrity_check") as any;
+    const status = Array.isArray(result) ? result[0]?.integrity_check : result;
+    if (status !== "ok") {
+      console.error("🚨 Database integrity check failed:", status);
     }
   }
 
