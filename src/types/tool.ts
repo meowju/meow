@@ -224,4 +224,17 @@ export const DEFAULT_TOOLS: Tool[] = [
       return await reviewer.verify(goal, testCmd);
     },
   },
+  {
+    name: "commit_work",
+    description: "Commit the successfully reviewed changes. MEOW (The Expert Taster) uses this to finalize a mission. Args: message",
+    execute: async (message: string) => {
+      const { execSync } = await import("child_process");
+      try {
+        execSync(`git add . && git commit -m "${message.replace(/"/g, '\\"')}"`, { encoding: "utf-8" });
+        return `✅ Changes committed: ${message}`;
+      } catch (e: any) {
+        return `Error committing changes: ${e.message}`;
+      }
+    },
+  },
 ];

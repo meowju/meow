@@ -28,8 +28,9 @@ EXISTING SKILLS: ${ctx.existingSkills?.join(", ") || "None"}
 
 INSTRUCTIONS:
 1. FIX the immediate issue and ensure all tests pass.
-2. RECURSIVE IMPROVEMENT: If this roadblock was caused by a missing capability, create a MEOW skill in 'src/skills/' or configure an MCP server.
-3. REPORT: Summarize what you did.
+2. RECURSIVE IMPROVEMENT: If this roadblock was caused by a missing capability, create a MEOW skill in 'src/skills/'.
+3. DO NOT COMMIT: MEOW is the Expert Taster and will review/commit your work.
+4. REPORT: Summarize your changes precisely.
 
 # KARPATHY GUIDELINES:
 - THINK BEFORE CODING: State assumptions explicitly.
@@ -49,6 +50,7 @@ INSTRUCTIONS:
       const message = `I am Meow (Flyweight). Roadblock: ${ctx.goal}. 
 Last Error: ${ctx.lastError || "Unknown"}
 Please fix the code, ensure tests pass, and if you identify a repeating pattern, wrap the solution into a reusable script in 'src/skills/'.
+Do NOT commit. MEOW will review and commit your changes.
 
 # KARPATHY GUIDELINES:
 - THINK BEFORE CODING: State assumptions explicitly.
@@ -56,7 +58,7 @@ Please fix the code, ensure tests pass, and if you identify a repeating pattern,
 - SURGICAL CHANGES: Touch only what you must. Match style.
 - GOAL-DRIVEN: Define success criteria.`;
       
-      return `aider --message "${message.replace(/"/g, '\\"')}" ${fileArgs} --auto-test --yes`;
+      return `aider --message "${message.replace(/"/g, '\\"')}" ${fileArgs} --auto-test --yes --no-auto-commit`;
     }
   },
   opencode: {
