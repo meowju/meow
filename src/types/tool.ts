@@ -64,24 +64,31 @@ export const DEFAULT_TOOLS: Tool[] = [
   },
   {
     name: "browse",
-    description: "Read content from a URL",
+    description: "Read content from a URL (10s timeout)",
     execute: async (url: string) => {
       try {
-        const response = await fetch(url.trim());
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10000);
+        const response = await fetch(url.trim(), { signal: controller.signal });
+        clearTimeout(timeout);
         const text = await response.text();
         return text.substring(0, 5000) + (text.length > 5000 ? "\n... [Truncated]" : "");
       } catch (e: any) {
+        if (e.name === 'AbortError') return `Error browsing ${url}: TIMEOUT after 10s - site may be slow/unreachable`;
         return `Error browsing ${url}: ${e.message}`;
       }
     },
   },
   {
     name: "search",
-    description: "Search the web (Google/DDG style)",
+    description: "Search the web (Google/DDG style) - 10s timeout",
     execute: async (query: string) => {
       try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10000);
         const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1`;
-        const response = await fetch(url);
+        const response = await fetch(url, { signal: controller.signal });
+        clearTimeout(timeout);
         const data = await response.json() as any;
         let result = `Web results for: ${query}\n\n`;
         if (data.AbstractText) result += `Summary: ${data.AbstractText}\n\n`;

@@ -257,6 +257,8 @@ export class Agent {
     // If we have an API key and the URL looks like an Anthropic-compatible endpoint, use that format
     if (this._apiKey && (this._baseUrl.includes("anthropic"))) {
       const url = this._baseUrl.endsWith("/v1/messages") ? this._baseUrl : `${this._baseUrl}/v1/messages`;
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 30000);
       const response = await fetch(url, {
         method: "POST",
         headers: {
@@ -270,7 +272,9 @@ export class Agent {
           messages: messages.map(m => ({ role: m.role, content: m.content })),
           max_tokens: 4096,
         }),
+        signal: controller.signal,
       });
+      clearTimeout(timeout);
 
       if (!response.ok) {
         const error = await response.text();
@@ -293,9 +297,11 @@ export class Agent {
     ];
 
     const url = this._baseUrl.includes("/api/chat") ? this._baseUrl : `${this._baseUrl}/api/chat`;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30000);
     const response = await fetch(url, {
       method: "POST",
-      headers: { 
+      headers: {
         "Content-Type": "application/json",
         ...(this._apiKey ? { "Authorization": `Bearer ${this._apiKey}` } : {})
       },
@@ -304,7 +310,9 @@ export class Agent {
         messages: fullMessages,
         stream: false,
       }),
+      signal: controller.signal,
     });
+    clearTimeout(timeout);
 
     if (!response.ok) {
       const error = await response.text();

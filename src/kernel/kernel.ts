@@ -1,5 +1,7 @@
 import { MeowDatabase } from "./database";
 import pc from "picocolors";
+import fs from "fs";
+import path from "path";
 
 export type KernelAction = 
   | { type: "SET_STATE"; key: string; value: any }
@@ -14,10 +16,51 @@ export class MeowKernel {
   private batchSize: number = 50;
   private maxRetries: number = 3;
   private monolithEntanglement: Map<number, number[]> = new Map(); // Spooky Action tracking
+  private agentHeartbeats: Map<number, Date> = new Map(); // Agent heartbeat tracking
+  private watchdogInterval: number = 60000; // 60 seconds
+  private frozenThresholdMs: number = 1200000; // 20 minutes - agent considered frozen if no heartbeat
 
   constructor(db: MeowDatabase) {
     this.db = db;
+    this.setupLogDirectory();
     this.setupExitHandlers();
+  }
+
+  private setupLogDirectory() {
+    const logDir = path.join(process.cwd(), ".meow", "logs");
+    if (!fs.existsSync(logDir)) {
+      fs.mkdirSync(logDir, { recursive: true });
+    }
+    this.logDir = logDir;
+    this.logFile = path.join(logDir, `meow-${new Date().toISOString().split('T')[0]}.log`);
+    this.logStream = fs.createWriteStream(this.logFile, { flags: 'a' });
+    this.log(pc.cyan("🚀 Meow Kernel initialized"), "KERNEL");
+  }
+
+  private logDir: string = "";
+  private logFile: string = "";
+  private logStream: fs.WriteStream | null = null;
+
+  private _log(level: string, source: string, message: string) {
+    const timestamp = new Date().toISOString();
+    const entry = `${timestamp} [${level}] [${source}] ${message}\n`;
+    this.logStream?.write(entry);
+    // Also echo to stdout for immediate feedback
+    if (level === "ERROR" || level === "WARN") {
+      console.error(entry.trim());
+    }
+  }
+
+  public log(message: string, source: string = "KERNEL") {
+    this._log("INFO", source, message);
+  }
+
+  public warn(message: string, source: string = "KERNEL") {
+    this._log("WARN", source, message);
+  }
+
+  public error(message: string, source: string = "KERNEL") {
+    this._log("ERROR", source, message);
   }
 
   /**
@@ -35,13 +78,74 @@ export class MeowKernel {
    * The Supervisor Main Loop
    */
   public start() {
-    console.log("🚀 Meow Kernel active. Monitoring synchronization points...");
+    this.log("Starting watchdog monitor...", "KERNEL");
     setInterval(() => {
       if (this.queue.length > 0 && !this.isProcessing) {
         this.drain();
       }
       this.monitorTTL();
+      this.watchdogCheck();
     }, this.drainInterval);
+  }
+
+  /**
+   * Agent heartbeat - agents should call this periodically to show they're alive
+   */
+  public pulse(pid: number) {
+    this.agentHeartbeats.set(pid, new Date());
+    this.updateMissionPulse(pid, "running");
+  }
+
+  /**
+   * Watchdog: Detect frozen/stuck agents and trigger respawn
+   */
+  private watchdogCheck() {
+    const now = new Date();
+    for (const [pid, lastPulse] of this.agentHeartbeats.entries()) {
+      const elapsed = now.getTime() - lastPulse.getTime();
+      if (elapsed > this.frozenThresholdMs) {
+        console.warn(pc.yellow(`\n⚠️ [WATCHDOG] Agent ${pid} frozen for ${Math.round(elapsed/60000)}min. Triggering respawn...`));
+        this.respawnAgent(pid);
+      }
+    }
+  }
+
+  /**
+   * Respawn a frozen agent
+   */
+  private respawnAgent(pid: number) {
+    // Get the frozen agent's mission info
+    const mission = this.db.getRawDb().prepare(`
+      SELECT agent_name, goal FROM missions WHERE pid = ?
+    `).get(pid) as any;
+
+    if (!mission) {
+      console.error(`🚨 [WATCHDOG] Cannot respawn PID ${pid} - no mission record found`);
+      return;
+    }
+
+    // Mark old mission as failed
+    this.db.getRawDb().prepare(`
+      UPDATE missions SET status = 'failed_frozen' WHERE pid = ?
+    `).run(pid);
+
+    // Remove from heartbeat tracking
+    this.agentHeartbeats.delete(pid);
+
+    // Spawn replacement agent
+    console.log(pc.cyan(`🔄 [WATCHDOG] Respawning agent for mission: ${mission.goal}`));
+
+    // Fork a new meow process
+    const { spawn } = require('child_process');
+    const newPid = spawn('bun', ['src/index.ts'], {
+      cwd: process.cwd(),
+      detached: true,
+      stdio: 'inherit'
+    }).pid;
+
+    // Register new mission
+    this.registerMission(newPid, mission.agent_name, mission.goal);
+    console.log(pc.green(`✅ [WATCHDOG] Respawned agent with new PID ${newPid}`));
   }
 
   /**
