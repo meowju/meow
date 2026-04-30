@@ -199,10 +199,21 @@ export class Agent {
       files: Array.from(this.files),
       lastError: lastError || "Unknown issue",
       attempt: attempt,
-      existingSkills: this.skillManager.getSkillNames()
+      existingSkills: this.skillManager.getSkillNames(),
+      monolithBlueprint: this.MONOLITH_BLUEPRINT,
+      kernel: this.kernel
     });
+
+    // POST-SUMMON AUDIT: Verify the specialist's work
+    const { MissionReviewer } = await import("./mission_reviewer");
+    const reviewer = new MissionReviewer(this);
+    const verification = await reviewer.verify(userInput, testCmd);
     
-    return escalationResult;
+    if (verification.includes("MISSION COHERENT")) {
+      return `✅ Specialist successfully completed the mission.\n${escalationResult}`;
+    } else {
+      return `❌ Specialist CLAIMED to be done, but verification FAILED.\n${verification}\n\nSpecialist Output:\n${escalationResult}`;
+    }
   }
 
   /**

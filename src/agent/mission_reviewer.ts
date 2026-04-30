@@ -33,35 +33,78 @@ export class MissionReviewer {
       }
     }
 
-    // 2. Quantum Coherence Evaluation
+    // 2. Logic & Consistency Audit (The "Liar Check")
     const constraints: ReasoningConstraint[] = [
       {
         id: "STRUCTURAL_ALIGNMENT",
-        weight: 30,
+        weight: 35,
         evaluate: (state: any) => {
-          // Quantum Coherence: Does the logic in the diff map to the goal's intent?
+          // Does the diff map to the goal's intent?
           const intents = goal.toLowerCase().split(" ");
           const density = intents.filter(i => state.diff.toLowerCase().includes(i)).length / intents.length;
           return density > 0.4;
         }
       },
       {
-        id: "ENTROPY_REDUCTION",
-        weight: 20,
+        id: "UNFINISHED_WORK_DETECTION",
+        weight: 30,
         evaluate: (state: any) => {
-          // Surgicality: Does the diff avoid unnecessary churn?
-          return state.diff.length < 5000; 
+          // Detect "TODO", "FIXME", or commented out code blocks that should have been implemented
+          const redFlags = ["todo", "fixme", "placeholder", "implement here"];
+          const matches = redFlags.filter(f => state.diff.toLowerCase().includes(f));
+          return matches.length === 0;
+        }
+      },
+      {
+        id: "LOGIC_COHERENCE",
+        weight: 35,
+        evaluate: (state: any) => {
+          // Check for empty functions or obviously mock returns
+          const mockPatterns = [/return\s+null/i, /return\s+""/i, /return\s+\[\]/i, /throw\s+new\s+Error\("Not implemented"\)/i];
+          const hasMocks = mockPatterns.some(p => p.test(state.diff));
+          return !hasMocks;
         }
       }
     ];
 
     const decisionSpace = [{ diff, goal }];
-    const result = await this.agent.quantumReasoning.solve(decisionSpace, constraints, (msg) => {
-      process.stdout.write(`\r${pc.dim("Analyzing Coherence: " + msg)}`);
+    const auditResult = await this.agent.quantumReasoning.solve(decisionSpace, constraints, (msg) => {
+      process.stdout.write(`\r${pc.dim("Running Logic Audit: " + msg)}`);
     });
-    process.stdout.write("\n"); // Clear the inline progress line
+    process.stdout.write("\n");
 
-    // 3. Execution Verification (Async)
+    // 2.5 Shadow Audit (Independent Critique)
+    console.log(pc.cyan("🔍 [SHADOW AUDIT] Performing line-by-line critique..."));
+    const shadowPrompt = `You are an Adversarial Code Reviewer. 
+    GOAL: ${goal}
+    DIFF: 
+    ${diff}
+    
+    CRITIQUE RULES:
+    1. Look for logic gaps, race conditions, or security hazards.
+    2. Identify any "lazy" patterns (placeholders, missing error handling).
+    3. If the code is 100% complete and correct, respond ONLY with "PASS".
+    4. If there are issues, list them clearly.`;
+    
+    const shadowCritique = await this.agent.callLLM("You are a Shadow Auditor.", [{ role: "user", content: shadowPrompt }]);
+    const shadowPassed = shadowCritique.trim().toUpperCase() === "PASS";
+    
+    if (!shadowPassed) {
+      console.log(pc.red(`\n❌ [SHADOW AUDIT] Found issues:\n${shadowCritique}`));
+    } else {
+      console.log(pc.green("✅ [SHADOW AUDIT] Logic verified."));
+    }
+
+    // 3. Adversarial Probing (Dynamic Verification)
+    if (testCmd) {
+      console.log(pc.yellow("\n🧪 [ADVERSARIAL CHECK] Generating verification probes..."));
+      // The agent should try to think of ways to BREAK the new code
+      const probePrompt = `Given the goal [${goal}] and the current diff, what are 3 edge cases or failure modes that might still exist? Describe them briefly.`;
+      const probes = await this.agent.callLLM("You are a QA Auditor.", [{ role: "user", content: probePrompt }]);
+      console.log(pc.dim(`Probes identified:\n${probes}`));
+    }
+
+    // 4. Execution Verification (Async)
     let testResult = "";
     if (testCmd) {
       try {
@@ -74,12 +117,24 @@ export class MissionReviewer {
       }
     }
 
-    const passed = (!testCmd || !testResult.includes("failed")) && result !== null;
+    const passed = (!testCmd || !testResult.includes("failed")) && auditResult !== null && shadowPassed;
     
     if (passed) {
-      return `VERDICT: MISSION COHERENT.\nStructural analysis suggests high alignment with goal [${goal}].\n${testCmd ? "System physics (tests) confirmed." : "Quantum coherence confirmed."}`;
+      return `VERDICT: MISSION COHERENT.
+Structural analysis suggests high alignment with goal [${goal}].
+Tests: ${testCmd ? "Passed" : "N/A"}
+Logic Audit: SUCCESS.
+Shadow Audit: PASS.`;
     } else {
-      return `VERDICT: MISSION DECOHERED.\nDetected logic gaps or test failures.\nERROR: ${testResult.substring(0, 500)}`;
+      let reason = "";
+      if (auditResult === null) reason = "Logic audit failed (low coherence).";
+      else if (!shadowPassed) reason = `Shadow audit rejected the changes:\n${shadowCritique}`;
+      else reason = "Test failures detected.";
+
+      return `VERDICT: MISSION DECOHERED.
+The work is NOT complete.
+REASON: ${reason}
+ERROR: ${testResult.substring(0, 500)}`;
     }
   }
 }
