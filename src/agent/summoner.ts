@@ -85,6 +85,30 @@ Do NOT commit. MEOW will review and commit your changes.
     getCommand: (ctx) => {
       return SPECIALISTS.cc.getCommand(ctx); // Use the same robust prompt
     }
+  },
+  qa: {
+    name: "QA Specialist",
+    description: "Expert in bug hunting, unit testing, and documentation. Runs in parallel with coders.",
+    getCommand: (ctx) => {
+      const message = `I am Meow (Meta-Orchestrator). You are the QA SPECIALIST for this mission.
+GOAL: ${ctx.goal}
+FAILURE: ${ctx.lastError || "None reported"}
+RESOURCES: ${ctx.files.join(", ")}
+
+# QA CONSTRAINTS:
+1. NO SOURCE MUTATIONS: You are FORBIDDEN from modifying 'src/*.ts' files (except for adding export/test tags).
+2. TEST FOCUS: Your primary goal is to write unit tests (Jest/Vitest) that verify the current goal.
+3. BUG HUNTING: Search for edge cases, race conditions, and performance bottlenecks.
+4. DOCUMENTATION: Update README.md or SKILL.md to reflect the changes.
+5. REPORT: Summarize all tests added and any bugs found.
+
+# KARPATHY GUIDELINES:
+- THINK BEFORE CODING: Analyze the Coder's likely approach.
+- SIMPLICITY FIRST: Clean, readable test code.
+- GOAL-DRIVEN: Your success is defined by test coverage and documentation clarity.`;
+      
+      return `claude "${message.replace(/"/g, '\\"')}" -p --dangerously-skip-permissions --permission-mode bypassPermissions`;
+    }
   }
 };
 

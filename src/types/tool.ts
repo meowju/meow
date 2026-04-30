@@ -197,7 +197,8 @@ export const DEFAULT_TOOLS: Tool[] = [
         lastError: "Explicitly requested by agent",
         attempt: 1,
         existingSkills: agent?.skillManager?.getSkillNames() || [],
-        monolithBlueprint: agent?.MONOLITH_BLUEPRINT
+        monolithBlueprint: agent?.MONOLITH_BLUEPRINT,
+        kernel: agent?.kernel
       });
       return result;
     },
@@ -285,6 +286,37 @@ export const DEFAULT_TOOLS: Tool[] = [
       } catch (e: any) {
         return `Error aborting mission ${pid}: ${e.message}`;
       }
+    },
+  },
+  {
+    name: "summon_swarm",
+    description: "Launch multiple specialists in parallel. Format: agent1|goal1 || agent2|goal2",
+    execute: async (args: string, agent?: any) => {
+      const missions = args.split("||").map(m => {
+        const parts = m.split("|").map(s => s.trim());
+        const agentName = parts[0];
+        const goal = parts.slice(1).join("|");
+        return { 
+          name: agentName, 
+          context: {
+            goal,
+            files: agent?.getFiles() || [],
+            kernel: agent?.kernel,
+            monolithBlueprint: agent?.MONOLITH_BLUEPRINT
+          }
+        };
+      });
+
+      if (missions.length === 0) return "Error: No missions specified.";
+      
+      const { summonParallel } = await import("../agent/summoner");
+      const results = await summonParallel(missions as any);
+      
+      let report = "### Swarm Mission Results\n\n";
+      results.forEach(r => {
+        report += `#### Agent: ${r.agentName} (${r.success ? "✅" : "❌"})\n${r.output.substring(0, 500)}...\n\n`;
+      });
+      return report;
     },
   },
 ];
