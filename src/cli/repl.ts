@@ -137,7 +137,10 @@ export function createRepl(agent: Agent) {
               text,
               false,
               undefined,
-              (status) => s.message(pc.dim(status))
+              (status) => {
+                const message = status.includes("⚛️") ? status : pc.dim(status);
+                s.message(message);
+              }
             );
           }
 

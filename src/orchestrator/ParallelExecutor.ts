@@ -7,12 +7,16 @@ import { Agent, AgentConfig } from '../agent/agent';
 import { McpManager } from '../agent/mcp';
 import { SkillManager } from '../agent/skills';
 import { DEFAULT_TOOLS } from '../types/tool';
+import { MeowKernel } from '../kernel/kernel';
+import { MeowDatabase } from '../kernel/database';
 
 export interface WorkerConfig {
   workerId: string;
   agentConfig: AgentConfig;
   mcpManager?: McpManager;
   skillManager?: SkillManager;
+  kernel: MeowKernel;
+  db: MeowDatabase;
 }
 
 export interface ExecutorConfig {
@@ -134,7 +138,11 @@ export class ParallelExecutor {
   }
 
   private async executeAgentTask(task: Task, worker: WorkerConfig): Promise<TaskResult> {
-    const agent = new Agent(worker.agentConfig);
+    const agent = new Agent({
+      ...worker.agentConfig,
+      kernel: worker.kernel,
+      db: worker.db
+    });
 
     if (worker.skillManager) {
       agent.skillManager = worker.skillManager;

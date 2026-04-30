@@ -185,6 +185,8 @@ export class Orchestrator {
         },
         mcpManager: this.mcpManager,
         skillManager: this.skillManager,
+        kernel: this.agent.kernel,
+        db: this.agent.db,
       }]);
     }
 

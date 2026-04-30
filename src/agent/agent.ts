@@ -12,6 +12,10 @@ import { resolve } from "path";
 import { summon } from "./summoner";
 import { DEFAULT_TOOLS, Tool } from "../types/tool";
 import { ExtensionManager } from "../extensions/ExtensionManager";
+import { MeowKernel } from "../kernel/kernel";
+import { QuantumMemory } from "./quantum_memory";
+import { QuantumReasoning } from "./quantum_reasoning";
+import { MeowDatabase } from "../kernel/database";
 
 export interface AgentConfig {
   model: string;
@@ -19,6 +23,8 @@ export interface AgentConfig {
   apiKey?: string;
   maxRetries?: number;
   files?: string[];
+  kernel: MeowKernel;
+  db: MeowDatabase;
 }
 
 export interface EditBlock {
@@ -51,6 +57,10 @@ export class Agent {
   public skillManager: SkillManager;
   public mcpManager: McpManager;
   public extensionManager: ExtensionManager;
+  public quantumMemory: QuantumMemory;
+  public quantumReasoning: QuantumReasoning;
+  public kernel: MeowKernel;
+  public db: MeowDatabase;
 
   constructor(config: AgentConfig) {
     this._model = config.model;
@@ -64,6 +74,10 @@ export class Agent {
     this.skillManager = new SkillManager();
     this.mcpManager = new McpManager();
     this.extensionManager = new ExtensionManager();
+    this.kernel = config.kernel;
+    this.db = config.db;
+    this.quantumMemory = new QuantumMemory(config.db, config.kernel);
+    this.quantumReasoning = new QuantumReasoning();
   }
 
   async chat(
