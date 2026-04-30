@@ -20,6 +20,18 @@ async function main() {
     kernel
   });
 
+  // Support for non-interactive command mode
+  const command = process.argv.slice(2).join(" ");
+  if (command) {
+    console.log(`🤖 [MEOW] Executing command: ${command}`);
+    await agent.chat(command, false, undefined, (status) => {
+      process.stdout.write(`\r${status}`);
+    });
+    console.log("\n✅ Command completed.");
+    await kernel.shutdown();
+    process.exit(0);
+  }
+
   const repl = createRepl(agent);
   await repl.start();
 }
