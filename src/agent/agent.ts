@@ -319,6 +319,9 @@ Available Tools:
 - summon | <agent>|<goal> : Summon a level-2 specialist (claude|aider) for complex tasks or roadblocks
 - activate_extension | <name> : Load a specialized extension into the session
 - archive_context          : Explicitly offload current history to Knowledge Base (Use when context is bloated)
+- verify_mission | goal|test : Review and verify if the work is done properly (MANDATORY after 'summon')
+
+Example: TOOL: verify_mission | Fixed the race condition in the kernel | npm test
 
 Example: TOOL: ls | .
 

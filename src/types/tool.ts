@@ -212,4 +212,16 @@ export const DEFAULT_TOOLS: Tool[] = [
       return "Successfully archived conversation tail to Quantum Knowledge Base. L1 context is now pruned.";
     },
   },
+  {
+    name: "verify_mission",
+    description: "Autonomously review if the work is done properly against the goal. Args: goal | test_command (optional)",
+    execute: async (args: string, agent?: any) => {
+      const [goal, testCmd] = args.split("|").map(s => s.trim());
+      if (!agent) return "Error: Agent not initialized.";
+      
+      const { MissionReviewer } = await import("../agent/mission_reviewer");
+      const reviewer = new MissionReviewer(agent);
+      return await reviewer.verify(goal, testCmd);
+    },
+  },
 ];
