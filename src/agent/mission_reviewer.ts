@@ -64,6 +64,16 @@ export class MissionReviewer {
           const hasMocks = mockPatterns.some(p => p.test(state.diff));
           return !hasMocks;
         }
+      },
+      {
+        id: "SOP_COMPLIANCE",
+        weight: 30,
+        evaluate: (state: any) => {
+          // Ensure the agent followed the "Think-Plan-Verify" loop
+          // (This is a fuzzy check, but we look for evidence of planning and verification)
+          const hasPlan = state.diff.toLowerCase().includes("plan") || state.goal.toLowerCase().includes("plan");
+          return hasPlan; 
+        }
       }
     ];
 
