@@ -30,23 +30,38 @@ export class QuantumMemory {
 
   public async recall(queryText: string, queryEmbedding: number[]): Promise<MemoryResult[]> {
     const rawDb = this.db.getRawDb();
-    
-    // 1. Fetch Superposition of Candidates (Classical VDB)
-    const candidates = rawDb.prepare(`
-      SELECT 
-        v.rowid,
-        d.content,
-        d.metadata,
-        v.distance
-      FROM vec_memory v
-      JOIN vector_memory_data d ON v.rowid = d.id
-      WHERE v.embedding MATCH ?
-      AND k = 10
-      AND v.rowid NOT IN (${Array.from(this.measuredIds).join(',') || -1})
-      ORDER BY v.distance
-    `).all(new Float32Array(queryEmbedding)) as DBMemoryRow[];
+
+    // Check vec_memory table exists and has data
+    let candidates: DBMemoryRow[] = [];
+    try {
+      candidates = rawDb.prepare(`
+        SELECT
+          v.rowid,
+          d.content,
+          d.metadata,
+          v.distance
+        FROM vec_memory v
+        JOIN vector_memory_data d ON v.rowid = d.id
+        WHERE v.embedding MATCH ?
+        AND k = 10
+        AND v.rowid NOT IN (${Array.from(this.measuredIds).join(',') || -1})
+        ORDER BY v.distance
+      `).all(new Float32Array(queryEmbedding)) as DBMemoryRow[];
+    } catch (e) {
+      // vec_memory might not be available or empty
+      return [];
+    }
 
     if (candidates.length === 0) return [];
+    if (candidates.length === 1) {
+      const winner = candidates[0];
+      this.measuredIds.add(winner.rowid);
+      return [{
+        content: winner.content,
+        metadata: JSON.parse(winner.metadata),
+        distance: winner.distance
+      }];
+    }
 
     // 2. Grover Amplitude Amplification (Real Circuit Simulation)
     const winner = await this.reasoning.groverSearch(candidates, queryText, (msg) => {

@@ -22,6 +22,7 @@ export class QuantumReasoning {
     if (space.length === 1) return space[0];
 
     const numQubits = Math.ceil(Math.log2(space.length));
+    if (numQubits === 0) return space[0];
     const circuit = new QuantumCircuit(numQubits);
 
     // Variational Parameters
@@ -84,6 +85,10 @@ export class QuantumReasoning {
   public async groverSearch<T>(candidates: T[], query: string, onPulse?: (msg: string) => void): Promise<T | null> {
     if (candidates.length === 0) return null;
     const numQubits = Math.ceil(Math.log2(candidates.length));
+    if (numQubits === 0) {
+      // Edge case: 1 candidate, no quantum search needed
+      return candidates[0];
+    }
     const circuit = new QuantumCircuit(numQubits);
 
     // 1. Initialize Superposition

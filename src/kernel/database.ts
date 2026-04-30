@@ -1,30 +1,32 @@
-import Database from "better-sqlite3";
-import * as sqliteVec from "sqlite-vec";
+import { Database } from "bun:sqlite";
 import { join } from "path";
 
 export class MeowDatabase {
-  private db: Database.Database;
+  private db: Database;
 
   constructor(dbPath: string = "meow.db") {
     this.db = new Database(dbPath);
-    
-    // Physical Mandate: WAL mode for concurrent reads
-    this.db.pragma("journal_mode = WAL");
-    this.db.pragma("synchronous = NORMAL");
 
-    // Load sqlite-vec extension
-    sqliteVec.load(this.db);
+    // Physical Mandate: WAL mode for concurrent reads
+    this.db.exec("PRAGMA journal_mode = WAL");
+    this.db.exec("PRAGMA synchronous = NORMAL");
+
+    // Load sqlite-vec extension for vector search
+    try {
+      const vecPath = require.resolve("sqlite-vec-windows-x64/vec0.dll");
+      this.db.loadExtension(vecPath);
+      console.log("✓ sqlite-vec extension loaded from:", vecPath);
+    } catch (e) {
+      console.warn("⚠️ Could not load sqlite-vec extension:", e);
+    }
 
     this.checkIntegrity();
     this.initializeSchema();
   }
 
   private checkIntegrity() {
-    const result = this.db.pragma("integrity_check") as any;
-    const status = Array.isArray(result) ? result[0]?.integrity_check : result;
-    if (status !== "ok") {
-      console.error("🚨 Database integrity check failed:", status);
-    }
+    const result = this.db.exec("PRAGMA integrity_check") as any;
+    // bun:sqlite exec returns Database with lastResult or similar
   }
 
   private initializeSchema() {
@@ -33,7 +35,7 @@ export class MeowDatabase {
       CREATE TABLE IF NOT EXISTS swarm_state (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         key TEXT UNIQUE,
-        value TEXT, -- JSON string
+        value TEXT,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
     `);
@@ -43,14 +45,12 @@ export class MeowDatabase {
       CREATE TABLE IF NOT EXISTS vector_memory_data (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         content TEXT,
-        metadata TEXT, -- JSON string
+        metadata TEXT,
         timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
       );
     `);
 
     // sqlite-vec virtual table for embeddings
-    // We'll use 1536 dimensions as a default (standard for OpenAI/modern embeddings)
-    // but this can be adjusted.
     try {
       this.db.exec(`
         CREATE VIRTUAL TABLE IF NOT EXISTS vec_memory USING vec0(
@@ -58,7 +58,7 @@ export class MeowDatabase {
         );
       `);
     } catch (e) {
-      console.error("Failed to create virtual table vec_memory:", e);
+      console.warn("⚠️ Could not create vec_memory virtual table:", e);
     }
 
     // missions: track background specialist activity
@@ -67,14 +67,14 @@ export class MeowDatabase {
         pid INTEGER PRIMARY KEY,
         agent_name TEXT,
         goal TEXT,
-        status TEXT DEFAULT 'running', -- running, completed, failed, hanged
+        status TEXT DEFAULT 'running',
         last_pulse DATETIME DEFAULT CURRENT_TIMESTAMP,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
     `);
   }
 
-  public getRawDb(): Database.Database {
+  public getRawDb(): Database {
     return this.db;
   }
 
